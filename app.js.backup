@@ -1,0 +1,655 @@
+// ==================== STATE MANAGEMENT ====================
+let appState = {
+    currentPage: 'landing',
+    userProfile: {
+        name: '',
+        age: '',
+        gender: '',
+        height: '',
+        weight: '',
+        activityLevel: 'lightly',
+        diets: [],
+        allergies: [],
+        customAllergy: '',
+        targetWeight: '',
+        timeframe: ''
+    },
+    mealPlan: [],
+    currentMealIndex: null,
+    currentDayIndex: null,
+    goalWarning: null,
+    acceptedWarning: false,
+    calorieRequirements: null
+};
+
+// ==================== BMI & CALORIE CALCULATIONS ====================
+function calculateBMI(height, weight) {
+    // BMI = weight (kg) / (height (m))^2
+    const heightInMeters = height / 100;
+    return (weight / (heightInMeters * heightInMeters)).toFixed(1);
+}
+
+function calculateBMR(height, weight, age, gender) {
+    // Mifflin-St Jeor Equation (more accurate than Harris-Benedict)
+    let bmr;
+    if (gender === 'male') {
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    } else if (gender === 'female') {
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+    } else {
+        // Average for other
+        const maleBMR = 10 * weight + 6.25 * height - 5 * age + 5;
+        const femaleBMR = 10 * weight + 6.25 * height - 5 * age - 161;
+        bmr = (maleBMR + femaleBMR) / 2;
+    }
+    return bmr;
+}
+
+function calculateTDEE(bmr, activityMultiplier = 1.375) {
+    return bmr * activityMultiplier;
+}
+
+function calculateHealthyCalories(height, weight, age, gender, targetWeight, timeframe, activityLevel = 'lightly') {
+    // Activity level multipliers
+    const activityMultipliers = {
+        'sedentary': 1.2,      // Little or no exercise
+        'lightly': 1.375,      // Exercise 1-3 days/week
+        'moderate': 1.55,      // Exercise 3-5 days/week
+        'very': 1.725,         // Exercise 6-7 days/week
+        'extra': 1.9           // Physical job or training twice/day
+    };
+    
+    const multiplier = activityMultipliers[activityLevel] || activityMultipliers['lightly'];
+    const bmr = calculateBMR(height, weight, age, gender);
+    const currentTDEE = calculateTDEE(bmr, multiplier);
+    
+    // Calculate weight difference and required weekly change
+    const weightDifference = Math.abs(weight - targetWeight);
+    const weeks = timeframe * 4.33; // Approximate weeks in months
+    const weeklyChange = weightDifference / weeks;
+    
+    // Goal-based calorie adjustment: ±300-500 kcal based on target timeframe
+    let calorieAdjustment = 400; // Default 400 kcal adjustment
+    
+    if (targetWeight < weight) {
+        // Weight loss: reduce calories by 300-500 kcal
+        if (weeklyChange > 0.75) {
+            calorieAdjustment = 500; // More aggressive for faster loss
+        } else if (weeklyChange < 0.5) {
+            calorieAdjustment = 300; // Gentler for slower loss
+        }
+    } else if (targetWeight > weight) {
+        // Weight gain: add calories by 300-500 kcal
+        if (weeklyChange > 0.75) {
+            calorieAdjustment = 500;
+        } else if (weeklyChange < 0.5) {
+            calorieAdjustment = 300;
+        }
+    }
+    
+    // Calculate adjusted TDEE
+    let adjustedDailyCalories;
+    if (targetWeight < weight) {
+        // Weight loss: reduce calories
+        adjustedDailyCalories = Math.max(currentTDEE - calorieAdjustment, 1200); // Minimum 1200
+    } else if (targetWeight > weight) {
+        // Weight gain: increase calories
+        adjustedDailyCalories = currentTDEE + calorieAdjustment;
+    } else {
+        // Maintenance
+        adjustedDailyCalories = currentTDEE;
+    }
+    
+    return {
+        bmi: calculateBMI(height, weight),
+        bmr: Math.round(bmr),
+        tdee: Math.round(currentTDEE),
+        activityLevel: activityLevel,
+        activityLevelLabel: {
+            'sedentary': 'Sedentary (Little/No Exercise)',
+            'lightly': 'Lightly Active (1-3 days/week)',
+            'moderate': 'Moderately Active (3-5 days/week)',
+            'very': 'Very Active (6-7 days/week)',
+            'extra': 'Extra Active (Physical job/training 2x/day)'
+        }[activityLevel],
+        recommendedDailyCalories: Math.round(adjustedDailyCalories),
+        weeklyGoal: weeklyChange.toFixed(2),
+        calorieAdjustment: Math.round(calorieAdjustment),
+        direction: targetWeight < weight ? 'loss' : targetWeight > weight ? 'gain' : 'maintenance'
+    };
+}
+
+// ==================== NAVIGATION ====================
+function goToUserForm() {
+    appState.currentPage = 'form';
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('formPage').style.display = 'block';
+    document.getElementById('mealPlanPage').style.display = 'none';
+}
+
+function backToLanding() {
+    appState.currentPage = 'landing';
+    document.getElementById('landingPage').style.display = 'flex';
+    document.getElementById('formPage').style.display = 'none';
+    document.getElementById('mealPlanPage').style.display = 'none';
+    resetForm();
+}
+
+function backToForm() {
+    appState.currentPage = 'form';
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('formPage').style.display = 'block';
+    document.getElementById('mealPlanPage').style.display = 'none';
+}
+
+function goToLanding() {
+    appState.currentPage = 'landing';
+    document.getElementById('landingPage').style.display = 'flex';
+    document.getElementById('formPage').style.display = 'none';
+    document.getElementById('mealPlanPage').style.display = 'none';
+    resetForm();
+}
+
+// ==================== FORM HELPERS ====================
+function toggleDiet(button) {
+    const diet = button.dataset.diet;
+    button.classList.toggle('active');
+    
+    if (button.classList.contains('active')) {
+        if (!appState.userProfile.diets.includes(diet)) {
+            appState.userProfile.diets.push(diet);
+        }
+    } else {
+        appState.userProfile.diets = appState.userProfile.diets.filter(d => d !== diet);
+    }
+    
+    document.getElementById('dietError').classList.remove('show');
+    validateAndUpdateGoalWarning();
+}
+
+function toggleAllergy(button) {
+    const allergy = button.dataset.allergy;
+    
+    if (allergy === 'none') {
+        if (button.classList.contains('active')) {
+            button.classList.remove('active');
+            appState.userProfile.allergies = [];
+        } else {
+            document.querySelectorAll('#allergyGroup .toggle-btn').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            appState.userProfile.allergies = ['none'];
+            document.getElementById('customAllergyInput').classList.remove('show');
+        }
+    } else {
+        document.querySelector('[data-allergy="none"]').classList.remove('active');
+        button.classList.toggle('active');
+        
+        if (button.classList.contains('active')) {
+            if (!appState.userProfile.allergies.includes(allergy)) {
+                appState.userProfile.allergies.push(allergy);
+            }
+        } else {
+            appState.userProfile.allergies = appState.userProfile.allergies.filter(a => a !== allergy);
+        }
+        
+        if (allergy === 'other' && button.classList.contains('active')) {
+            document.getElementById('customAllergyInput').classList.add('show');
+        } else if (allergy === 'other' && !button.classList.contains('active')) {
+            document.getElementById('customAllergyInput').classList.remove('show');
+            appState.userProfile.customAllergy = '';
+        }
+    }
+}
+
+function resetForm() {
+    document.getElementById('name').value = '';
+    document.getElementById('age').value = '';
+    document.getElementById('gender').value = '';
+    document.getElementById('height').value = '';
+    document.getElementById('weight').value = '';
+    document.getElementById('activityLevel').value = 'lightly';
+    document.getElementById('targetWeight').value = '';
+    document.getElementById('timeframe').value = '';
+    document.getElementById('customAllergy').value = '';
+    
+    document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.error-message').forEach(msg => msg.classList.remove('show'));
+    document.getElementById('warningBox').classList.remove('show');
+    document.getElementById('customAllergyInput').classList.remove('show');
+    
+    appState.userProfile = {
+        name: '',
+        age: '',
+        gender: '',
+        height: '',
+        weight: '',
+        activityLevel: 'lightly',
+        diets: [],
+        allergies: [],
+        customAllergy: '',
+        targetWeight: '',
+        timeframe: ''
+    };
+    appState.goalWarning = null;
+    appState.acceptedWarning = false;
+}
+
+// ==================== VALIDATION ====================
+function validateHeightWeight() {
+    const height = parseInt(document.getElementById('height').value);
+    const weight = parseInt(document.getElementById('weight').value);
+    let isValid = true;
+
+    const heightError = document.getElementById('heightError');
+    const weightError = document.getElementById('weightError');
+
+    if (isNaN(height) || height < 50 || height > 250) {
+        heightError.textContent = 'Height must be between 50 and 250 cm';
+        heightError.classList.add('show');
+        isValid = false;
+    } else {
+        heightError.classList.remove('show');
+    }
+
+    if (isNaN(weight) || weight < 10 || weight > 300) {
+        weightError.textContent = 'Weight must be between 10 and 300 kg';
+        weightError.classList.add('show');
+        isValid = false;
+    } else {
+        weightError.classList.remove('show');
+    }
+
+    return isValid;
+}
+
+function validateAndUpdateGoalWarning() {
+    const height = parseInt(document.getElementById('height').value);
+    const weight = parseInt(document.getElementById('weight').value);
+    const targetWeight = parseInt(document.getElementById('targetWeight').value);
+    const timeframe = parseInt(document.getElementById('timeframe').value);
+
+    if (isNaN(height) || isNaN(weight) || isNaN(targetWeight) || isNaN(timeframe)) {
+        return;
+    }
+
+    if (!validateHeightWeight()) {
+        return;
+    }
+
+    const warning = analyzeGoal(weight, targetWeight, timeframe);
+    appState.goalWarning = warning;
+
+    if (warning) {
+        document.getElementById('warningBox').classList.add('show');
+        document.getElementById('warningText').textContent = warning.message;
+    } else {
+        document.getElementById('warningBox').classList.remove('show');
+        appState.acceptedWarning = false;
+    }
+}
+
+function analyzeGoal(currentWeight, targetWeight, monthsTimeframe) {
+    const weightDifference = Math.abs(currentWeight - targetWeight);
+    const maxHealthyWeeklyChange = 1; // kg per week
+    const maxHealthyMonthlyChange = maxHealthyWeeklyChange * 4; // ~4 kg per month
+    const maxHealthyTotalChange = maxHealthyMonthlyChange * monthsTimeframe;
+
+    if (weightDifference > maxHealthyTotalChange) {
+        const requiredMonths = Math.ceil(weightDifference / maxHealthyMonthlyChange);
+        return {
+            isUnrealistic: true,
+            message: `Your goal requires losing/gaining ${weightDifference} kg in ${monthsTimeframe} months. The maximum safe change is ${maxHealthyMonthlyChange} kg per month. We recommend at least ${requiredMonths} months. Would you like to accept our suggested timeframe of ${requiredMonths} months?`,
+            suggestedMonths: requiredMonths
+        };
+    }
+
+    return null;
+}
+
+function acceptGoal() {
+    if (appState.goalWarning && appState.goalWarning.suggestedMonths) {
+        document.getElementById('timeframe').value = appState.goalWarning.suggestedMonths;
+        appState.acceptedWarning = true;
+        document.getElementById('warningBox').classList.remove('show');
+    }
+}
+
+function editGoal() {
+    document.getElementById('targetWeight').focus();
+}
+
+function submitForm() {
+    // Validate height and weight
+    if (!validateHeightWeight()) {
+        return;
+    }
+
+    // Validate diet selection
+    if (appState.userProfile.diets.length === 0) {
+        document.getElementById('dietError').textContent = 'Please select at least one diet type';
+        document.getElementById('dietError').classList.add('show');
+        return;
+    }
+
+    // Validate all required fields
+    if (!document.getElementById('age').value || !document.getElementById('gender').value || 
+        !document.getElementById('targetWeight').value || !document.getElementById('timeframe').value) {
+        alert('Please fill in all required fields');
+        return;
+    }
+
+    // Check goal warning
+    if (appState.goalWarning && !appState.acceptedWarning) {
+        alert('Please address the weight goal warning before proceeding');
+        return;
+    }
+
+    // Save form data
+    appState.userProfile.name = document.getElementById('name').value || 'Guest';
+    appState.userProfile.age = document.getElementById('age').value;
+    appState.userProfile.gender = document.getElementById('gender').value;
+    appState.userProfile.height = document.getElementById('height').value;
+    appState.userProfile.weight = document.getElementById('weight').value;
+    appState.userProfile.activityLevel = document.getElementById('activityLevel').value;
+    appState.userProfile.targetWeight = document.getElementById('targetWeight').value;
+    appState.userProfile.timeframe = document.getElementById('timeframe').value;
+    appState.userProfile.customAllergy = document.getElementById('customAllergy').value;
+
+    // Calculate calorie requirements
+    appState.calorieRequirements = calculateHealthyCalories(
+        parseInt(appState.userProfile.height),
+        parseInt(appState.userProfile.weight),
+        parseInt(appState.userProfile.age),
+        appState.userProfile.gender,
+        parseInt(appState.userProfile.targetWeight),
+        parseInt(appState.userProfile.timeframe),
+        appState.userProfile.activityLevel
+    );
+
+    // Generate meal plan
+    generateAndDisplayMealPlan();
+}
+
+// ==================== MEAL GENERATION ====================
+function pickMeal(mealType, dayIndex, mealIndex) {
+    const validMeals = foodDataset.filter(food => {
+        // Match meal type
+        if (food.mealType !== mealType) return false;
+
+        // Match at least one diet
+        const dietMatch = appState.userProfile.diets.some(diet => food.diets.includes(diet));
+        if (!dietMatch) return false;
+
+        // Check allergens
+        if (appState.userProfile.allergies.includes('none')) {
+            if (food.allergens.length > 0) return false;
+        } else {
+            const hasAllergen = appState.userProfile.allergies.some(allergy => {
+                if (allergy === 'other') {
+                    return false; // Handle custom allergen separately if needed
+                }
+                return food.allergens.includes(allergy);
+            });
+            if (hasAllergen) return false;
+        }
+
+        return true;
+    });
+
+    if (validMeals.length === 0) {
+        return {
+            name: 'No meal available',
+            calories: 0,
+            parts: [],
+            mealType: mealType
+        };
+    }
+
+    // Random selection
+    const randomIndex = Math.floor(Math.random() * validMeals.length);
+    return { ...validMeals[randomIndex] };
+}
+
+function selectMeal(mealType, dayIndex, mealIndex) {
+    return pickMeal(mealType, dayIndex, mealIndex);
+}
+
+function generatePlan() {
+    const mealPlan = [];
+    const targetDailyCalories = appState.calorieRequirements.recommendedDailyCalories;
+    const mealTypes = ['breakfast', 'lunch', 'snack', 'dinner'];
+    
+    // Calories distribution: Breakfast 28%, Lunch 35%, Snack 10%, Dinner 27%
+    const calorieSplit = {
+        breakfast: 0.28,
+        lunch: 0.35,
+        snack: 0.10,
+        dinner: 0.27
+    };
+
+    for (let day = 0; day < 7; day++) {
+        const dayMeals = {};
+        let dayTotalCalories = 0;
+        
+        // Select meals targeting specific calorie ranges
+        mealTypes.forEach(mealType => {
+            const targetMealCalories = targetDailyCalories * calorieSplit[mealType];
+            dayMeals[mealType] = selectMealByCalories(mealType, day, targetMealCalories);
+            dayTotalCalories += dayMeals[mealType].calories;
+        });
+        
+        // Adjust portions to hit target within ±50 kcal
+        const calorieGap = targetDailyCalories - dayTotalCalories;
+        if (Math.abs(calorieGap) > 50) {
+            adjustMealPortions(dayMeals, calorieGap, targetDailyCalories);
+        }\n        \n        mealPlan.push(dayMeals);\n    }\n\n    return mealPlan;\n}\n\nfunction selectMealByCalories(mealType, dayIndex, targetCalories) {\n    // Select meal closest to target calories\n    const validMeals = foodDataset.filter(food => {\n        if (food.mealType !== mealType) return false;\n        const dietMatch = appState.userProfile.diets.some(diet => food.diets.includes(diet));\n        if (!dietMatch) return false;\n        if (appState.userProfile.allergies.includes('none')) {\n            if (food.allergens.length > 0) return false;\n        } else {\n            const hasAllergen = appState.userProfile.allergies.some(allergy => {\n                return allergy !== 'other' && food.allergens.includes(allergy);\n            });\n            if (hasAllergen) return false;\n        }\n        return true;\n    });\n    \n    if (validMeals.length === 0) {\n        return { name: 'No meal available', calories: 0, parts: [], mealType: mealType };\n    }\n    \n    // Find meal closest to target calories\n    return validMeals.reduce((closest, meal) => {\n        const currentDiff = Math.abs(meal.calories - targetCalories);\n        const closestDiff = Math.abs(closest.calories - targetCalories);\n        return currentDiff < closestDiff ? meal : closest;\n    });\n}\n\nfunction adjustMealPortions(dayMeals, calorieGap, targetDailyCalories) {\n    // Adjust portions to match calorie target\n    const currentTotal = Object.values(dayMeals).reduce((sum, meal) => sum + meal.calories, 0);\n    const scaleFactor = 1 + (calorieGap / currentTotal);\n    \n    Object.values(dayMeals).forEach(meal => {\n        if (meal.parts && meal.parts.length > 0) {\n            meal.parts.forEach(part => {\n                const numberMatch = part.quantity.match(/^([\\d.]+)/);\n                if (numberMatch) {\n                    const number = parseFloat(numberMatch[1]);\n                    const unit = part.quantity.replace(/^[\\d.]+\\s*/, '');\n                    const newQuantity = (number * scaleFactor).toFixed(1);\n                    part.quantity = newQuantity + ' ' + unit;\n                    part.kcal = Math.round(parseFloat(part.kcal) * scaleFactor);\n                }\n            });\n            meal.calories = Math.round(meal.calories * scaleFactor);\n        }\n    });\n}
+
+function findAlternativeMeals(currentMeal, mealType) {
+    const alternatives = foodDataset.filter(food => {
+        // Match meal type
+        if (food.mealType !== mealType) return false;
+
+        // Don't include current meal
+        if (food.name === currentMeal.name) return false;
+
+        // Match at least one diet
+        const dietMatch = appState.userProfile.diets.some(diet => food.diets.includes(diet));
+        if (!dietMatch) return false;
+
+        // Check allergens
+        if (appState.userProfile.allergies.includes('none')) {
+            if (food.allergens.length > 0) return false;
+        } else {
+            const hasAllergen = appState.userProfile.allergies.some(allergy => {
+                if (allergy === 'other') return false;
+                return food.allergens.includes(allergy);
+            });
+            if (hasAllergen) return false;
+        }
+
+        // Check calorie range (±15%)
+        const minCalories = currentMeal.calories * 0.85;
+        const maxCalories = currentMeal.calories * 1.15;
+        if (food.calories < minCalories || food.calories > maxCalories) return false;
+
+        return true;
+    });
+
+    return alternatives.slice(0, 5);
+}
+
+function changeMeal(dayIndex, mealType) {
+    const currentMeal = appState.mealPlan[dayIndex][mealType];
+    const alternatives = findAlternativeMeals(currentMeal, mealType);
+
+    appState.currentDayIndex = dayIndex;
+    appState.currentMealIndex = mealType;
+
+    const alternativesGrid = document.getElementById('alternativesGrid');
+    alternativesGrid.innerHTML = '';
+
+    if (alternatives.length === 0) {
+        alternativesGrid.innerHTML = '<p style="color: #999;">No alternative meals available with your constraints.</p>';
+    } else {
+        alternatives.forEach(meal => {
+            const mealElement = document.createElement('div');
+            mealElement.className = 'alternative-meal';
+            mealElement.innerHTML = `
+                <div class="alternative-meal-name">${meal.name}</div>
+                <div class="alternative-meal-calories">${meal.calories} kcal</div>
+                <div class="alternative-meal-parts">
+                    ${meal.parts.map(p => `${p.ingredient} ${p.quantity} – ${p.kcal} kcal`).join('<br>')}
+                </div>
+            `;
+            mealElement.onclick = () => selectAlternativeMeal(meal, dayIndex, mealType);
+            alternativesGrid.appendChild(mealElement);
+        });
+    }
+
+    document.getElementById('changeMealModal').classList.add('show');
+}
+
+function selectAlternativeMeal(meal, dayIndex, mealType) {
+    appState.mealPlan[dayIndex][mealType] = meal;
+    closeMealModal();
+    displayMealPlan();
+}
+
+function closeMealModal() {
+    document.getElementById('changeMealModal').classList.remove('show');
+    appState.currentDayIndex = null;
+    appState.currentMealIndex = null;
+}
+
+// ==================== DISPLAY ====================
+function generateAndDisplayMealPlan() {
+    appState.mealPlan = generatePlan();
+    appState.currentPage = 'mealplan';
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('formPage').style.display = 'none';
+    document.getElementById('mealPlanPage').style.display = 'block';
+    displayMealPlan();
+}
+
+function displayMealPlan() {
+    // Display plan info
+    const totalCalories = appState.mealPlan.reduce((total, day) => {
+        return total + Object.values(day).reduce((dayTotal, meal) => dayTotal + meal.calories, 0);
+    }, 0);
+    const avgDailyCalories = Math.round(totalCalories / 7);
+    
+    // Get calorie requirements
+    const cal = appState.calorieRequirements;
+    const diffFromRecommended = avgDailyCalories - cal.recommendedDailyCalories;
+    const diffPercentage = ((diffFromRecommended / cal.recommendedDailyCalories) * 100).toFixed(1);
+
+    const planInfo = document.getElementById('planInfo');
+    planInfo.innerHTML = `
+        <div class="info-card">
+            <div class="info-label">Name</div>
+            <div class="info-value">${appState.userProfile.name}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">BMI</div>
+            <div class="info-value">${cal.bmi} <span style="font-size: 12px; color: #999;">(Current)</span></div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Goal</div>
+            <div class="info-value">${appState.userProfile.weight} → ${appState.userProfile.targetWeight} kg</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Weekly Target</div>
+            <div class="info-value">${cal.weeklyGoal} kg/${cal.direction === 'loss' ? 'loss' : 'gain'}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">BMR (Calories at Rest)</div>
+            <div class="info-value">${cal.bmr} kcal</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Activity Level</div>
+            <div class="info-value" style="font-size: 14px;">${cal.activityLevelLabel}</div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">TDEE (Daily Burn)</div>
+            <div class="info-value">${cal.tdee} kcal</div>
+        </div>
+        <div class="info-card" style="border-left: 4px solid #138808; background: #f0f8f0;">
+            <div class="info-label">✓ Recommended Daily Calories</div>
+            <div class="info-value" style="color: #138808; font-size: 22px;">${cal.recommendedDailyCalories} kcal</div>
+            <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                Adjustment: ${cal.calorieAdjustment > 0 ? '-' : '+'}${Math.abs(cal.calorieAdjustment)} kcal/day
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Actual Plan Calories</div>
+            <div class="info-value" style="color: ${diffFromRecommended > 200 ? '#d32f2f' : diffFromRecommended < -200 ? '#d32f2f' : '#138808'};">
+                ${avgDailyCalories} kcal
+                <span style="font-size: 12px; display: block; margin-top: 5px;">
+                    (${diffFromRecommended > 0 ? '+' : ''}${diffFromRecommended} kcal, ${diffPercentage}%)
+                </span>
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="info-label">Timeframe</div>
+            <div class="info-value">${appState.userProfile.timeframe} month${appState.userProfile.timeframe > 1 ? 's' : ''}</div>
+        </div>
+    `;
+
+    // Display daily meals
+    const mealPlanContainer = document.getElementById('mealPlanContainer');
+    mealPlanContainer.innerHTML = '';
+
+    appState.mealPlan.forEach((day, dayIndex) => {
+        const dayCard = document.createElement('div');
+        dayCard.className = 'day-card';
+
+        const dayDates = new Date();
+        dayDates.setDate(dayDates.getDate() + dayIndex);
+        const dayName = dayDates.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+        let dayHTML = `<div class="day-header">📅 Day ${dayIndex + 1} - ${dayName}</div>`;
+        dayHTML += '<div class="meals-grid">';
+
+        ['breakfast', 'lunch', 'snack', 'dinner'].forEach(mealType => {
+            const meal = day[mealType];
+            const mealTypeLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+            const mealTypeIcon = {
+                breakfast: '🌅',
+                lunch: '🍜',
+                snack: '🥨',
+                dinner: '🌙'
+            }[mealType];
+
+            dayHTML += `
+                <div class="meal-item">
+                    <div class="meal-type">${mealTypeIcon} ${mealTypeLabel}</div>
+                    <div class="meal-name">${meal.name}</div>
+                    <div class="meal-calories">${meal.calories} kcal</div>
+                    <div class="meal-parts">
+                        ${meal.parts.map(p => `<span class="meal-part">${p.ingredient} ${p.quantity} – ${p.kcal} kcal</span>`).join('')}
+                    </div>
+                    <button class="btn-change" onclick="changeMeal(${dayIndex}, '${mealType}')">Change Meal</button>
+                </div>
+            `;
+        });
+
+        dayHTML += '</div>';
+        dayCard.innerHTML = dayHTML;
+        mealPlanContainer.appendChild(dayCard);
+    });
+
+    // Close modal if open
+    document.getElementById('changeMealModal').classList.remove('show');
+}
+
+// ==================== INITIALIZATION ====================
+// Initialize on page load
+window.addEventListener('DOMContentLoaded', function() {
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('changeMealModal');
+        if (event.target === modal) {
+            closeMealModal();
+        }
+    };
+});

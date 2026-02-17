@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MealMitra</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-header-inner">
+            <div class="brand-chip brand-chip-center">MealMitra</div>
+            <div class="header-spacer"></div>
+            <div class="header-actions" id="headerActions">
+                <button class="btn-secondary btn-edit" onclick="backToForm()">Edit Profile</button>
+                <button class="btn-secondary btn-new" onclick="generateNewPlan()">New Plan</button>
+                <button class="btn-secondary btn-logout" onclick="logout()" id="logoutBtn">Logout</button>
+            </div>
+        </div>
+    </header>
+    <!-- Landing Page -->
+<div id="landingPage" class="landing-page app-page">
+        <div class="landing-content">
+            <h1>🍛 MealMitra</h1>
+            <p class="subtitle">
+                Create your personalized 7-day Indian meal plan based on your health goals and dietary preferences. You can continue as a guest. Guest data will not be saved.
+            </p>
+            <button class="btn-primary" onclick="goToAuth()">Sign in / Create account</button>
+            <button class="btn-secondary" style="margin-left:12px;" onclick="goToUserForm()">Continue as Guest</button>
+            <button class="btn-secondary" style="margin-left:12px;" onclick="runDemoProfile()">View demo plan</button>
+        </div>
+    </div>
+
+    <!-- Auth Page -->
+<div id="authPage" class="auth-page app-page">
+        <div class="auth-card">
+            <h2 class="page-title">Welcome Back</h2>
+            <p class="subtitle">Sign in or create an account to save your meal plans.</p>
+            <div class="form-group">
+                <div class="input-wrapper">
+                    <label>Email</label>
+                    <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+                </div>
+                <div class="input-wrapper">
+                    <label>Password</label>
+                    <input type="password" id="authPassword" placeholder="At least 6 characters" autocomplete="current-password">
+                </div>
+            </div>
+            <div class="auth-actions">
+                <button class="btn-primary" onclick="loginWithEmail()">Sign in</button>
+                <button class="btn-secondary" onclick="signupWithEmail()">Create account</button>
+            </div>
+            <div class="error-message" id="authMessage"></div>
+            <div class="auth-footer">
+                <button class="btn-secondary" onclick="goToUserForm()">Continue as Guest</button>
+                <button class="btn-secondary" onclick="backToLanding()">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Form Page -->
+    <div id="formPage" class="form-page app-page">
+        <div class="container">
+            <h2 class="page-title">Your Health Profile</h2>
+
+            <!-- Personal Info -->
+            <div class="form-section">
+                <div class="section-title">👤 Personal Information</div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label>Name (Optional)</label>
+                        <input type="text" id="name" placeholder="Enter your name">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>Age <span class="required-indicator">*</span></label>
+                        <div class="select-wrapper age-wrapper">
+                            <select id="age" class="fancy-select" onchange="validateAndUpdateGoalWarning()">
+                                <option value="">Select age</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <label>Gender <span class="required-indicator">*</span></label>
+                        <div class="select-wrapper gender-wrapper">
+                            <select id="gender" class="fancy-select" onchange="validateAndUpdateGoalWarning()">
+                                <option value="">Select gender</option>
+                                <option value="male">♂ Male</option>
+                                <option value="female">♀ Female</option>
+                                <option value="other">⚧ Other</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Body Metrics -->
+            <div class="form-section">
+                <div class="section-title">📏 Body Metrics</div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label>Height (cm) <span class="required-indicator">*</span> (50-250 cm)</label>
+                        <input type="number" id="height" placeholder="e.g., 170" onblur="validateAndUpdateGoalWarning()" onchange="validateAndUpdateGoalWarning()">
+                        <div class="error-message" id="heightError"></div>
+                    </div>
+                    <div class="input-wrapper">
+                        <label>Weight (kg) <span class="required-indicator">*</span> (10-300 kg)</label>
+                        <div class="input-suffix">
+                            <input type="number" id="weight" class="fancy-number" placeholder="e.g., 75" onblur="validateAndUpdateGoalWarning()" onchange="validateAndUpdateGoalWarning()">
+                            <span class="input-unit">kg</span>
+                        </div>
+                        <div class="error-message" id="weightError"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label>Activity Level <span class="required-indicator">*</span></label>
+                        <div class="select-wrapper">
+                            <select id="activityLevel" class="fancy-select" onchange="validateAndUpdateGoalWarning()">
+                                <option value="sedentary">Sedentary - Little or no exercise</option>
+                                <option value="lightly" selected>Lightly Active - Exercise 1-3 days/week</option>
+                                <option value="moderate">Moderately Active - Exercise 3-5 days/week</option>
+                                <option value="very">Very Active - Exercise 6-7 days/week</option>
+                                <option value="extra">Extra Active - Physical job or training 2x/day</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diet Preferences -->
+            <div class="form-section">
+                <div class="section-title">🥗 Diet Preferences <span class="required-indicator">*</span></div>
+                <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Select at least one diet type</p>
+                <div class="toggle-group" id="dietGroup">
+                    <button class="toggle-btn" data-diet="vegetarian" onclick="toggleDiet(this)">Vegetarian</button>
+                    <button class="toggle-btn" data-diet="vegan" onclick="toggleDiet(this)">Vegan</button>
+                    <button class="toggle-btn" data-diet="eggetarian" onclick="toggleDiet(this)">Eggetarian</button>
+                    <button class="toggle-btn" data-diet="nonveg" onclick="toggleDiet(this)">Non-Vegetarian</button>
+                </div>
+                <div class="error-message" id="dietError"></div>
+            </div>
+
+            <!-- Allergies -->
+            <div class="form-section">
+                <div class="section-title">⚠️ Allergies</div>
+                <div class="toggle-group" id="allergyGroup">
+                    <button class="toggle-btn" data-allergy="none" onclick="toggleAllergy(this)">None</button>
+                    <button class="toggle-btn" data-allergy="peanuts" onclick="toggleAllergy(this)">Peanuts</button>
+                    <button class="toggle-btn" data-allergy="gluten" onclick="toggleAllergy(this)">Gluten</button>
+                    <button class="toggle-btn" data-allergy="dairy" onclick="toggleAllergy(this)">Dairy</button>
+                    <button class="toggle-btn" data-allergy="soy" onclick="toggleAllergy(this)">Soy</button>
+                    <button class="toggle-btn" data-allergy="other" onclick="toggleAllergy(this)">Other</button>
+                </div>
+                <div class="custom-allergy-input" id="customAllergyInput">
+                    <input type="text" id="customAllergy" placeholder="Enter your custom allergy">
+                </div>
+            </div>
+
+            <!-- Weight Goal -->
+            <div class="form-section">
+                <div class="section-title">🎯 Weight Goal</div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label>Target Weight (kg) <span class="required-indicator">*</span> (10-300 kg)</label>
+                        <input type="number" id="targetWeight" placeholder="e.g., 70" onblur="validateAndUpdateGoalWarning()" onchange="validateAndUpdateGoalWarning()">
+                    </div>
+                    <div class="input-wrapper">
+                        <label>Timeframe (months) <span class="required-indicator">*</span></label>
+                        <div class="select-wrapper">
+                            <select id="timeframe" class="fancy-select" onchange="validateAndUpdateGoalWarning()">
+                                <option value="">Select timeframe</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warning Box -->
+                <div class="warning-box" id="warningBox">
+                    <div class="warning-title" id="warningTitle">⚠️ Warning: Unsafe Goal</div>
+                    <div class="warning-text" id="warningText"></div>
+                    <button class="goal-accept-button" onclick="acceptGoal()">Accept Suggested Plan</button>
+                    <button class="goal-edit-button" onclick="editGoal()">Edit My Goal</button>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="nav-buttons">
+                <button class="btn-secondary" onclick="backFromForm()">Back</button>
+                <button class="btn-secondary" onclick="saveProfileOnly()">Save Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meal Plan Page -->
+<div id="mealPlanPage" class="meal-plan-page app-page">
+        <div class="container">
+            <h2 class="page-title">Your 7-Day Meal Plan 🍽️</h2>
+
+            <!-- Plan Summary -->
+            <div class="plan-header">
+                <div class="plan-info" id="planInfo"></div>
+            </div>
+
+            <!-- Daily Plans -->
+            <div id="mealPlanContainer"></div>
+            
+            <!-- Grocery List -->
+           <div id="groceryListContainer" class="grocery-box collapsed">
+    <div class="grocery-header" onclick="toggleGroceryList()">
+        🛒 Weekly Grocery List
+        <span id="groceryToggleIcon">▼</span>
+    </div>
+    <div id="groceryContent" class="grocery-content"></div>
+</div>
+
+        </div>
+    </div>
+
+    <!-- Change Meal Modal -->
+    <div id="changeMealModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Select Alternative Meal</div>
+            <div class="alternatives-grid" id="alternativesGrid"></div>
+            <button class="btn-secondary" style="width: 100%; margin-top: 20px;" onclick="closeMealModal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- External Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+    <script src="indian_food_dataset.js"></script>
+    <script src="supabase.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Initialize dropdowns on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            // Age dropdown (0-100)
+            const ageSelect = document.getElementById('age');
+            for (let i = 0; i <= 100; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                ageSelect.appendChild(option);
+            }
+
+            // Timeframe dropdown (1-24 months)
+            const timeframeSelect = document.getElementById('timeframe');
+            for (let i = 1; i <= 24; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i + ' month' + (i > 1 ? 's' : '');
+                timeframeSelect.appendChild(option);
+            }
+
+       // Auto-run demo once per session (requested)
+// if (typeof runDemoProfile === 'function' && !sessionStorage.getItem('demo_run_once')) {
+//     sessionStorage.setItem('demo_run_once', 'true');
+//     setTimeout(runDemoProfile, 450);
+// }
+
+        });
+    </script>
